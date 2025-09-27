@@ -5,22 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <!-- Meta tags cho Facebook Open Graph -->
-    <meta property="og:title" content="" id="og-title">
-    <meta property="og:description" content="" id="og-description">
-    <meta property="og:image" content="" id="og-image">
-    <meta property="og:url" content="" id="og-url">
+    <meta property="og:title" content="">
+    <meta property="og:description" content="">
+    <meta property="og:image" content="">
+    <meta property="og:url" content="">
     <meta property="og:type" content="article">
-    <meta property="og:site_name" content="TodayOnUs">
+    <meta property="og:site_name" content="">
     
     <!-- Meta tags cho Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="" id="twitter-title">
-    <meta name="twitter:description" content="" id="twitter-description">
-    <meta name="twitter:image" content="" id="twitter-image">
+    <meta name="twitter:title" content="">
+    <meta name="twitter:description" content="">
+    <meta name="twitter:image" content="">
     
     <!-- Meta tags cơ bản -->
-    <title id="page-title">Loading...</title>
-    <meta name="description" content="" id="page-description">
+    <title></title>
+    <meta name="description" content="">
     
     <style>
         body {
@@ -63,83 +63,16 @@
             return 'https://google.com';
         }
         
-        // Hàm fetch thông tin từ URL đích
-        async function fetchMetaInfo(targetUrl) {
-            try {
-                // Sử dụng CORS proxy để fetch thông tin
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-                const response = await fetch(proxyUrl);
-                const html = await response.text();
-                
-                // Parse HTML để lấy meta tags
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                // Lấy thông tin từ meta tags
-                const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 
-                             doc.querySelector('title')?.textContent || 
-                             'Loading...';
-                             
-                const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
-                                  doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                                  'Đang tải nội dung...';
-                                  
-                const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || 
-                             doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') || 
-                             'https://via.placeholder.com/1200x630/cccccc/666666?text=Loading...';
-                
-                return { title, description, image };
-            } catch (error) {
-                console.error('Error fetching meta info:', error);
-                // Fallback values
-                return {
-                    title: 'Loading...',
-                    description: 'Đang tải nội dung...',
-                    image: 'https://via.placeholder.com/1200x630/cccccc/666666?text=Loading...'
-                };
-            }
-        }
-        
-        // Hàm cập nhật meta tags
-        function updateMetaTags(metaInfo, targetUrl) {
-            // Cập nhật Open Graph tags
-            document.getElementById('og-title').setAttribute('content', metaInfo.title);
-            document.getElementById('og-description').setAttribute('content', metaInfo.description);
-            document.getElementById('og-image').setAttribute('content', metaInfo.image);
-            document.getElementById('og-url').setAttribute('content', targetUrl);
-            
-            // Cập nhật Twitter tags
-            document.getElementById('twitter-title').setAttribute('content', metaInfo.title);
-            document.getElementById('twitter-description').setAttribute('content', metaInfo.description);
-            document.getElementById('twitter-image').setAttribute('content', metaInfo.image);
-            
-            // Cập nhật basic meta tags
-            document.getElementById('page-title').textContent = metaInfo.title;
-            document.getElementById('page-description').setAttribute('content', metaInfo.description);
-        }
         
         // Hàm chính
-        async function init() {
+        function init() {
             const TARGET_URL = getRedirectUrl();
-            
             
             // Hiển thị thông tin debug
             console.log('Current URL:', window.location.href);
             console.log('Target URL:', TARGET_URL);
             
-            // Nếu không phải redirect đến google.com, fetch thông tin meta
-            if (TARGET_URL !== 'https://google.com') {
-                const metaInfo = await fetchMetaInfo(TARGET_URL);
-                updateMetaTags(metaInfo, TARGET_URL);
-            } else {
-                // Fallback cho google.com
-                updateMetaTags({
-                    title: 'Redirect to Google',
-                    description: 'You are being redirected to Google',
-                    image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
-                }, TARGET_URL);
-            }
-            
+            // Redirect ngay lập tức
             window.location.href = TARGET_URL;
         }
         
