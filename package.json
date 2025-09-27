@@ -1,8 +1,0 @@
-{
-  "name": "redirect-link",
-  "version": "1.0.0",
-  "description": "Dynamic redirect website with meta tags",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  }
-}
