@@ -1,0 +1,5 @@
+# Netlify redirects file
+# This file should be in the root directory of your site
+
+# Redirect all requests to index.html
+/*    /index.html   200
