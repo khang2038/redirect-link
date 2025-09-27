@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Meta tags cho Facebook Open Graph -->
+    <meta property="og:title" content="" id="og-title">
+    <meta property="og:description" content="" id="og-description">
+    <meta property="og:image" content="" id="og-image">
+    <meta property="og:url" content="" id="og-url">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TodayOnUs">
+    
+    <!-- Meta tags cho Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="" id="twitter-title">
+    <meta name="twitter:description" content="" id="twitter-description">
+    <meta name="twitter:image" content="" id="twitter-image">
+    
+    <!-- Meta tags cơ bản -->
+    <title id="page-title">Loading...</title>
+    <meta name="description" content="" id="page-description">
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+        }
+        
+        .loading {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .redirect-info {
+            font-size: 14px;
+            color: #888;
+            margin-top: 20px;
+        }
+        
+        .manual-link {
+            margin-top: 20px;
+        }
+        
+        .manual-link a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .manual-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <div class="loading">Đang chuyển hướng...</div>
+        <div class="redirect-info">
+            Nếu không tự động chuyển hướng, vui lòng click vào link bên dưới:
+        </div>
+        <div class="manual-link">
+            <a href="#" id="redirectLink">Click vào đây để tiếp tục</a>
+        </div>
+    </div>
+
+    <script>
+        // Hàm xử lý redirect động
+        function getRedirectUrl() {
+            const currentUrl = window.location.href;
+            const urlParts = currentUrl.split('/');
+            
+            // Tìm vị trí của 'posts' trong URL
+            const postsIndex = urlParts.findIndex(part => part === 'posts');
+            
+            if (postsIndex === -1 || postsIndex === urlParts.length - 1) {
+                // Không có 'posts' hoặc 'posts' là phần cuối cùng -> redirect đến google.com
+                return 'https://google.com';
+            } else {
+                // Có phần sau 'posts' -> tạo URL đích
+                const pathAfterPosts = urlParts.slice(postsIndex + 1).join('/');
+                return `https://todayonus.com/posts/${pathAfterPosts}`;
+            }
+        }
+        
+        // Hàm fetch thông tin từ URL đích
+        async function fetchMetaInfo(targetUrl) {
+            try {
+                // Sử dụng CORS proxy để fetch thông tin
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+                const response = await fetch(proxyUrl);
+                const html = await response.text();
+                
+                // Parse HTML để lấy meta tags
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Lấy thông tin từ meta tags
+                const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 
+                             doc.querySelector('title')?.textContent || 
+                             'Loading...';
+                             
+                const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
+                                  doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                                  'Đang tải nội dung...';
+                                  
+                const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || 
+                             doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') || 
+                             'https://via.placeholder.com/1200x630/cccccc/666666?text=Loading...';
+                
+                return { title, description, image };
+            } catch (error) {
+                console.error('Error fetching meta info:', error);
+                // Fallback values
+                return {
+                    title: 'Loading...',
+                    description: 'Đang tải nội dung...',
+                    image: 'https://via.placeholder.com/1200x630/cccccc/666666?text=Loading...'
+                };
+            }
+        }
+        
+        // Hàm cập nhật meta tags
+        function updateMetaTags(metaInfo, targetUrl) {
+            // Cập nhật Open Graph tags
+            document.getElementById('og-title').setAttribute('content', metaInfo.title);
+            document.getElementById('og-description').setAttribute('content', metaInfo.description);
+            document.getElementById('og-image').setAttribute('content', metaInfo.image);
+            document.getElementById('og-url').setAttribute('content', targetUrl);
+            
+            // Cập nhật Twitter tags
+            document.getElementById('twitter-title').setAttribute('content', metaInfo.title);
+            document.getElementById('twitter-description').setAttribute('content', metaInfo.description);
+            document.getElementById('twitter-image').setAttribute('content', metaInfo.image);
+            
+            // Cập nhật basic meta tags
+            document.getElementById('page-title').textContent = metaInfo.title;
+            document.getElementById('page-description').setAttribute('content', metaInfo.description);
+        }
+        
+        // Hàm chính
+        async function init() {
+            const TARGET_URL = getRedirectUrl();
+            
+            // Cập nhật link thủ công
+            document.getElementById('redirectLink').href = TARGET_URL;
+            
+            // Hiển thị thông tin debug
+            console.log('Current URL:', window.location.href);
+            console.log('Target URL:', TARGET_URL);
+            
+            // Nếu không phải redirect đến google.com, fetch thông tin meta
+            if (TARGET_URL !== 'https://google.com') {
+                const metaInfo = await fetchMetaInfo(TARGET_URL);
+                updateMetaTags(metaInfo, TARGET_URL);
+            } else {
+                // Fallback cho google.com
+                updateMetaTags({
+                    title: 'Redirect to Google',
+                    description: 'You are being redirected to Google',
+                    image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
+                }, TARGET_URL);
+            }
+            
+            // Tự động redirect sau 3 giây (tăng thời gian để fetch meta info)
+            setTimeout(function() {
+                window.location.href = TARGET_URL;
+            }, 300);
+        }
+        
+        // Khởi tạo
+        init();
+    </script>
+</body>
+</html>
