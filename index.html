@@ -4,23 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Meta tags cho Facebook Open Graph -->
-    <meta property="og:title" content="" id="og-title">
-    <meta property="og:description" content="" id="og-description">
-    <meta property="og:image" content="" id="og-image">
-    <meta property="og:url" content="" id="og-url">
-    <meta property="og:type" content="article">
-    <meta property="og:site_name" content="TodayOnUs">
-    
-    <!-- Meta tags cho Twitter -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="" id="twitter-title">
-    <meta name="twitter:description" content="" id="twitter-description">
-    <meta name="twitter:image" content="" id="twitter-image">
-    
     <!-- Meta tags cơ bản -->
-    <title id="page-title">Loading...</title>
-    <meta name="description" content="" id="page-description">
+    <title>Redirect</title>
+    <meta name="description" content="Redirecting...">
     
     <style>
         body {
@@ -63,53 +49,6 @@
             return 'https://google.com';
         }
         
-        // Hàm fetch thông tin từ URL đích (chạy trong background)
-        async function fetchMetaInfo(targetUrl) {
-            try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-                const response = await fetch(proxyUrl);
-                const html = await response.text();
-                
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 
-                             doc.querySelector('title')?.textContent || 
-                             'Loading...';
-                             
-                const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
-                                  doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                                  'Đang tải nội dung...';
-                                  
-                const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || 
-                             doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') || 
-                             '';
-                
-                return { title, description, image };
-            } catch (error) {
-                console.error('Error fetching meta info:', error);
-                return {
-                    title: 'Loading...',
-                    description: 'Đang tải nội dung...',
-                    image: ''
-                };
-            }
-        }
-        
-        // Hàm cập nhật meta tags
-        function updateMetaTags(metaInfo, targetUrl) {
-            document.getElementById('og-title').setAttribute('content', metaInfo.title);
-            document.getElementById('og-description').setAttribute('content', metaInfo.description);
-            document.getElementById('og-image').setAttribute('content', metaInfo.image);
-            document.getElementById('og-url').setAttribute('content', targetUrl);
-            
-            document.getElementById('twitter-title').setAttribute('content', metaInfo.title);
-            document.getElementById('twitter-description').setAttribute('content', metaInfo.description);
-            document.getElementById('twitter-image').setAttribute('content', metaInfo.image);
-            
-            document.getElementById('page-title').textContent = metaInfo.title;
-            document.getElementById('page-description').setAttribute('content', metaInfo.description);
-        }
         
         // Hàm chính
         function init() {
@@ -119,15 +58,8 @@
             console.log('Current URL:', window.location.href);
             console.log('Target URL:', TARGET_URL);
             
-            // Redirect ngay lập tức (không chờ fetch)
+            // Redirect ngay lập tức
             window.location.href = TARGET_URL;
-            
-            // Fetch meta info trong background (cho Facebook crawler)
-            if (TARGET_URL !== 'https://google.com') {
-                fetchMetaInfo(TARGET_URL).then(metaInfo => {
-                    updateMetaTags(metaInfo, TARGET_URL);
-                });
-            }
         }
         
         // Khởi tạo

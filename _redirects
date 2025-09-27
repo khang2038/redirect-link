@@ -1,5 +1,9 @@
 # Netlify redirects file
 # This file should be in the root directory of your site
 
-# Redirect all requests to index.html
+# Redirect posts URLs to function for dynamic meta tags
+/posts/*    /.netlify/functions/meta?path=:splat    200
+/posts      /.netlify/functions/meta?path=posts     200
+
+# Redirect all other requests to index.html
 /*    /index.html   200
