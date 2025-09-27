@@ -101,19 +101,30 @@
         // Hàm xử lý redirect động
         function getRedirectUrl() {
             const currentUrl = window.location.href;
-            const urlParts = currentUrl.split('/');
+            const url = new URL(currentUrl);
+            const pathname = url.pathname;
             
-            // Tìm vị trí của 'posts' trong URL
-            const postsIndex = urlParts.findIndex(part => part === 'posts');
+            console.log('Current URL:', currentUrl);
+            console.log('Pathname:', pathname);
             
-            if (postsIndex === -1 || postsIndex === urlParts.length - 1) {
-                // Không có 'posts' hoặc 'posts' là phần cuối cùng -> redirect đến google.com
+            // Kiểm tra nếu pathname kết thúc bằng '/posts' hoặc '/posts/'
+            if (pathname === '/posts' || pathname === '/posts/') {
+                console.log('Redirecting to Google - posts only');
                 return 'https://google.com';
-            } else {
-                // Có phần sau 'posts' -> tạo URL đích
-                const pathAfterPosts = urlParts.slice(postsIndex + 1).join('/');
-                return `https://todayonus.com/posts/${pathAfterPosts}`;
             }
+            
+            // Kiểm tra nếu có '/posts/' trong pathname
+            const postsMatch = pathname.match(/^\/posts\/(.+)$/);
+            if (postsMatch) {
+                const pathAfterPosts = postsMatch[1];
+                const targetUrl = `https://todayonus.com/posts/${pathAfterPosts}`;
+                console.log('Redirecting to:', targetUrl);
+                return targetUrl;
+            }
+            
+            // Không có posts -> redirect đến google.com
+            console.log('Redirecting to Google - no posts found');
+            return 'https://google.com';
         }
         
         // Hàm fetch thông tin từ URL đích
