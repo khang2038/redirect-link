@@ -54,7 +54,7 @@ exports.handler = async (event, context) => {
 async function fetchMetaInfo(target) {
     const maxRedirects = 5;
 
-    async function fetchWithRedirects(currentUrl, redirectCount = 0) {
+    async function fetchWithRedirects(currentUrl, redirectCount = 0, useBrowserUA = false) {
         return new Promise((resolve, reject) => {
             const isHttps = currentUrl.startsWith('https');
             const client = isHttps ? https : http;
@@ -62,7 +62,9 @@ async function fetchMetaInfo(target) {
             const req = client.request(currentUrl, {
                 method: 'GET',
                 headers: {
-                    'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+                    'User-Agent': useBrowserUA
+                        ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+                        : 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Accept-Encoding': 'identity',
@@ -78,7 +80,7 @@ async function fetchMetaInfo(target) {
                     }
                     const nextUrl = new URL(res.headers.location, currentUrl).toString();
                     res.resume();
-                    resolve(fetchWithRedirects(nextUrl, redirectCount + 1));
+                    resolve(fetchWithRedirects(nextUrl, redirectCount + 1, useBrowserUA));
                     return;
                 }
 
@@ -96,15 +98,40 @@ async function fetchMetaInfo(target) {
         });
     }
 
-    const { html, finalUrl } = await fetchWithRedirects(target);
-    const title = extractMeta(html, 'og:title') || extractMeta(html, 'twitter:title') || getTitle(html) || 'Loading...';
-    const description = extractMeta(html, 'og:description') || extractMeta(html, 'twitter:description') || extractMeta(html, 'description') || '';
-    let image = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image') || '';
+    // First attempt with Facebook UA
+    let { html, finalUrl } = await fetchWithRedirects(target, 0, false);
+
+    // Try AMP link if exists
+    let ampUrl = extractAmpLink(html);
+    if (ampUrl) {
+        try {
+            const ampResolved = new URL(ampUrl, finalUrl).toString();
+            const ampResp = await fetchWithRedirects(ampResolved, 0, false);
+            html = ampResp.html;
+            finalUrl = ampResp.finalUrl;
+        } catch (_) {}
+    }
+
+    let title = extractMeta(html, 'og:title') || extractMeta(html, 'twitter:title') || getTitle(html) || '';
+    let description = extractMeta(html, 'og:description') || extractMeta(html, 'twitter:description') || extractMeta(html, 'description') || '';
+    let image = extractMeta(html, 'og:image') || extractMeta(html, 'og:image:secure_url') || extractMeta(html, 'og:image:url') || extractMeta(html, 'twitter:image') || extractMeta(html, 'twitter:image:src') || '';
+
+    // If still missing title, retry with browser-like UA
+    if (!title) {
+        try {
+            const retry = await fetchWithRedirects(target, 0, true);
+            html = retry.html;
+            finalUrl = retry.finalUrl;
+            title = extractMeta(html, 'og:title') || extractMeta(html, 'twitter:title') || getTitle(html) || '';
+            description = description || extractMeta(html, 'og:description') || extractMeta(html, 'twitter:description') || extractMeta(html, 'description') || '';
+            image = image || extractMeta(html, 'og:image') || extractMeta(html, 'og:image:secure_url') || extractMeta(html, 'og:image:url') || extractMeta(html, 'twitter:image') || extractMeta(html, 'twitter:image:src') || '';
+        } catch (_) {}
+    }
     // Resolve relative image URL
     if (image) {
         try { image = new URL(image, finalUrl).toString(); } catch (_) {}
     }
-    return { title, description, image };
+    return { title: title || 'Loading...', description, image };
 }
 
 function extractMeta(html, property) {
@@ -116,6 +143,11 @@ function extractMeta(html, property) {
 function getTitle(html) {
     const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     return m ? m[1].trim() : null;
+}
+
+function extractAmpLink(html) {
+    const m = html.match(/<link[^>]+rel=["']amphtml["'][^>]*href=["']([^"']+)["']/i);
+    return m ? m[1] : null;
 }
 
 function generateHTML(metaInfo, targetUrl, requestUrl) {
