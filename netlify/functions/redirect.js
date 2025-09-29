@@ -1,5 +1,6 @@
 const https = require('https');
 const http = require('http');
+const zlib = require('zlib');
 
 exports.handler = async (event, context) => {
     console.log('Event:', JSON.stringify(event, null, 2));
@@ -21,45 +22,38 @@ exports.handler = async (event, context) => {
     
     console.log('Target URL:', targetUrl);
     
-    // Tạo fallback meta info dựa trên URL
-    const fallbackMeta = generateFallbackMeta(targetUrl);
+    // Luôn fetch meta info từ target URL
+    let metaInfo;
     
-    try {
-        // Fetch meta info từ target URL với timeout dài hơn
-        const metaInfo = await Promise.race([
-            fetchMetaInfo(targetUrl),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), 8000)
-            )
-        ]);
-        console.log('Meta info fetched successfully:', metaInfo);
-        
-        // Generate HTML với meta tags thực tế
-        const html = generateHTML(metaInfo, targetUrl);
-        
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'public, max-age=300'
-            },
-            body: html
+    if (targetUrl === 'https://google.com') {
+        metaInfo = {
+            title: 'Redirect to Google',
+            description: 'You are being redirected to Google',
+            image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
         };
-    } catch (error) {
-        console.error('Error fetching meta info, using fallback:', error);
-        
-        // Sử dụng fallback meta info
-        const html = generateHTML(fallbackMeta, targetUrl);
-        
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'public, max-age=60'
-            },
-            body: html
-        };
+    } else {
+        try {
+            console.log('Attempting to fetch meta info from:', targetUrl);
+            metaInfo = await fetchMetaInfo(targetUrl);
+            console.log('Meta info fetched successfully:', metaInfo);
+        } catch (error) {
+            console.error('Error fetching meta info:', error);
+            // Fallback nếu fetch lỗi
+            metaInfo = generateFallbackMeta(targetUrl);
+        }
     }
+    
+    // Generate HTML với meta tags
+    const html = generateHTML(metaInfo, targetUrl);
+    
+    return {
+        statusCode: 200,
+        headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=300'
+        },
+        body: html
+    };
 };
 
 function fetchMetaInfo(url) {
@@ -86,14 +80,24 @@ function fetchMetaInfo(url) {
             let dataLength = 0;
             const maxLength = 200000; // Tăng lên 200KB
             
-            res.on('data', (chunk) => {
+            // Xử lý gzip/deflate
+            let stream = res;
+            if (res.headers['content-encoding'] === 'gzip') {
+                stream = res.pipe(zlib.createGunzip());
+            } else if (res.headers['content-encoding'] === 'deflate') {
+                stream = res.pipe(zlib.createInflate());
+            } else if (res.headers['content-encoding'] === 'br') {
+                stream = res.pipe(zlib.createBrotliDecompress());
+            }
+            
+            stream.on('data', (chunk) => {
                 dataLength += chunk.length;
                 if (dataLength < maxLength) {
                     data += chunk;
                 }
             });
             
-            res.on('end', () => {
+            stream.on('end', () => {
                 try {
                     console.log('Data length received:', data.length);
                     
@@ -115,6 +119,11 @@ function fetchMetaInfo(url) {
                     console.error('Error parsing meta data:', error);
                     reject(error);
                 }
+            });
+            
+            stream.on('error', (error) => {
+                console.error('Stream error:', error);
+                reject(error);
             });
         });
         
