@@ -111,22 +111,46 @@
             document.getElementById('page-description').setAttribute('content', metaInfo.description);
         }
         
+        // Hàm phát hiện Facebook crawler
+        function isFacebookCrawler() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            return userAgent.includes('facebookexternalhit') || 
+                   userAgent.includes('facebookcatalog') ||
+                   userAgent.includes('whatsapp') ||
+                   userAgent.includes('twitterbot') ||
+                   userAgent.includes('linkedinbot');
+        }
+        
         // Hàm chính
-        function init() {
+        async function init() {
             const TARGET_URL = getRedirectUrl();
             
             // Hiển thị thông tin debug
             console.log('Current URL:', window.location.href);
             console.log('Target URL:', TARGET_URL);
+            console.log('Is Facebook Crawler:', isFacebookCrawler());
             
-            // Redirect ngay lập tức (không chờ fetch)
-            window.location.href = TARGET_URL;
-            
-            // Fetch meta info trong background (cho Facebook crawler)
-            if (TARGET_URL !== 'https://google.com') {
-                fetchMetaInfo(TARGET_URL).then(metaInfo => {
-                    updateMetaTags(metaInfo, TARGET_URL);
-                });
+            // Nếu là Facebook crawler, fetch meta info trước
+            if (isFacebookCrawler()) {
+                if (TARGET_URL !== 'https://google.com') {
+                    try {
+                        const metaInfo = await fetchMetaInfo(TARGET_URL);
+                        updateMetaTags(metaInfo, TARGET_URL);
+                        console.log('Meta info updated for crawler:', metaInfo);
+                    } catch (error) {
+                        console.error('Error fetching meta info:', error);
+                    }
+                } else {
+                    // Fallback cho google.com
+                    updateMetaTags({
+                        title: 'Redirect to Google',
+                        description: 'You are being redirected to Google',
+                        image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
+                    }, TARGET_URL);
+                }
+            } else {
+                // User thường - redirect ngay lập tức
+                window.location.href = TARGET_URL;
             }
         }
         
