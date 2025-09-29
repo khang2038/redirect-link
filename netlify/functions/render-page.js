@@ -6,6 +6,7 @@ exports.handler = async (event, context) => {
     const path = event.path;
     const url = new URL(event.rawUrl);
     const requestUrl = event.rawUrl;
+    const ua = (event.headers && (event.headers['user-agent'] || event.headers['User-Agent'])) || '';
     
     // Parse URL để lấy target URL
     let targetUrl = 'https://google.com';
@@ -23,9 +24,21 @@ exports.handler = async (event, context) => {
         targetUrl = 'https://google.com';
     }
     
+    // Nếu không phải crawler -> redirect 302 tức thì (siêu nhanh)
+    if (!isCrawler(ua)) {
+        return {
+            statusCode: 302,
+            headers: {
+                Location: targetUrl,
+                'Cache-Control': 'no-store'
+            },
+            body: ''
+        };
+    }
+
     try {
-        // Fetch meta info từ target URL
-        let metaInfo = await fetchMetaInfo(targetUrl);
+        // Crawler: Fetch meta info từ target URL (có timeout mềm 4s)
+        let metaInfo = await withTimeout(fetchMetaInfo(targetUrl), 4000).catch(() => null);
 
         // Fallback mạnh nếu site đích chặn bot/không có OG
         if (!metaInfo || (!metaInfo.title && !metaInfo.image)) {
@@ -341,4 +354,24 @@ function generateHTML(metaInfo, targetUrl, requestUrl) {
     </script>
 </body>
 </html>`;
+}
+
+function isCrawler(userAgent) {
+    const ua = (userAgent || '').toLowerCase();
+    return ua.includes('facebookexternalhit') ||
+           ua.includes('facebookcatalog') ||
+           ua.includes('whatsapp') ||
+           ua.includes('twitterbot') ||
+           ua.includes('linkedinbot') ||
+           ua.includes('slackbot') ||
+           ua.includes('telegrambot') ||
+           ua.includes('discordbot');
+}
+
+function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve(null), ms);
+        promise.then(v => { clearTimeout(t); resolve(v); })
+               .catch(e => { clearTimeout(t); reject(e); });
+    });
 }
