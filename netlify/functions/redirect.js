@@ -21,12 +21,20 @@ exports.handler = async (event, context) => {
     
     console.log('Target URL:', targetUrl);
     
+    // Tạo fallback meta info dựa trên URL
+    const fallbackMeta = generateFallbackMeta(targetUrl);
+    
     try {
-        // Fetch meta info từ target URL
-        const metaInfo = await fetchMetaInfo(targetUrl);
+        // Fetch meta info từ target URL với timeout ngắn
+        const metaInfo = await Promise.race([
+            fetchMetaInfo(targetUrl),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 1500)
+            )
+        ]);
         console.log('Meta info fetched:', metaInfo);
         
-        // Generate HTML với meta tags
+        // Generate HTML với meta tags thực tế
         const html = generateHTML(metaInfo, targetUrl);
         
         return {
@@ -38,21 +46,18 @@ exports.handler = async (event, context) => {
             body: html
         };
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching meta info, using fallback:', error);
         
-        // Fallback HTML
-        const fallbackHtml = generateHTML({
-            title: 'Loading...',
-            description: 'Please wait...',
-            image: ''
-        }, targetUrl);
+        // Sử dụng fallback meta info
+        const html = generateHTML(fallbackMeta, targetUrl);
         
         return {
             statusCode: 200,
             headers: {
-                'Content-Type': 'text/html; charset=utf-8'
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': 'public, max-age=60'
             },
-            body: fallbackHtml
+            body: html
         };
     }
 };
@@ -61,11 +66,22 @@ function fetchMetaInfo(url) {
     return new Promise((resolve, reject) => {
         const client = url.startsWith('https') ? https : http;
         
-        const request = client.get(url, (res) => {
+        const request = client.get(url, {
+            timeout: 3000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; FacebookBot/1.0)',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+        }, (res) => {
             let data = '';
+            let dataLength = 0;
+            const maxLength = 100000; // Giới hạn 100KB
             
             res.on('data', (chunk) => {
-                data += chunk;
+                dataLength += chunk.length;
+                if (dataLength < maxLength) {
+                    data += chunk;
+                }
             });
             
             res.on('end', () => {
@@ -93,7 +109,7 @@ function fetchMetaInfo(url) {
             reject(error);
         });
         
-        request.setTimeout(5000, () => {
+        request.setTimeout(2000, () => {
             request.destroy();
             reject(new Error('Request timeout'));
         });
@@ -104,6 +120,29 @@ function extractMeta(html, property) {
     const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
     const match = html.match(regex);
     return match ? match[1] : null;
+}
+
+function generateFallbackMeta(targetUrl) {
+    if (targetUrl === 'https://google.com') {
+        return {
+            title: 'Redirect to Google',
+            description: 'You are being redirected to Google',
+            image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
+        };
+    }
+    
+    // Tạo meta info dựa trên URL path
+    const urlPath = targetUrl.replace('https://todayonus.com/posts/', '');
+    const words = urlPath.split('-').slice(0, 5); // Lấy 5 từ đầu
+    const title = words.map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+    
+    return {
+        title: title || 'Breaking News',
+        description: 'Latest news and updates from TodayOnUs',
+        image: 'https://todayonus.com/wp-content/uploads/2025/01/default-news.jpg'
+    };
 }
 
 function generateHTML(metaInfo, targetUrl) {
