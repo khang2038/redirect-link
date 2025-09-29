@@ -1,0 +1,17 @@
+{
+  "name": "redirect-link",
+  "version": "1.0.0",
+  "description": "Dynamic redirect link with Facebook preview",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "dev": "python3 -m http.server 8000"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {},
+  "keywords": ["redirect", "facebook", "preview"],
+  "author": "",
+  "license": "MIT"
+}

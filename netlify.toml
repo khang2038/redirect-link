@@ -1,5 +1,16 @@
 [build]
   publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/posts/*"
+  to = "/.netlify/functions/redirect"
+  status = 200
+
+[[redirects]]
+  from = "/posts"
+  to = "/.netlify/functions/redirect"
+  status = 200
 
 [[redirects]]
   from = "/*"
