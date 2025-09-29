@@ -22,20 +22,54 @@
     <title id="page-title">Loading...</title>
     <meta name="description" content="" id="page-description">
     
-    <!-- Meta refresh cho Facebook crawler -->
-    <meta http-equiv="refresh" content="3;url=" id="meta-refresh">
-    
     <style>
         body {
             margin: 0;
-            padding: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
             background-color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+        }
+        .link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007cba;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .link:hover {
+            background-color: #005a87;
         }
     </style>
 </head>
 <body>
-</body>
-
+    <div class="container">
+        <h1 id="content-title">Loading...</h1>
+        <p id="content-description">Please wait while we load the content...</p>
+        <img id="content-image" src="" alt="" style="display: none;">
+        <p>You will be redirected to the full article in 3 seconds...</p>
+        <a href="#" id="content-link" class="link">Continue to article</a>
+    </div>
+    
     <script>
         // Hàm xử lý redirect động
         function getRedirectUrl() {
@@ -66,7 +100,7 @@
             return 'https://google.com';
         }
         
-        // Hàm fetch thông tin từ URL đích (chạy trong background)
+        // Hàm fetch thông tin từ URL đích
         async function fetchMetaInfo(targetUrl) {
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
@@ -82,7 +116,7 @@
                              
                 const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
                                   doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                                  'Đang tải nội dung...';
+                                  'Loading content...';
                                   
                 const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || 
                              doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') || 
@@ -93,7 +127,7 @@
                 console.error('Error fetching meta info:', error);
                 return {
                     title: 'Loading...',
-                    description: 'Đang tải nội dung...',
+                    description: 'Loading content...',
                     image: ''
                 };
             }
@@ -112,6 +146,18 @@
             
             document.getElementById('page-title').textContent = metaInfo.title;
             document.getElementById('page-description').setAttribute('content', metaInfo.description);
+            
+            // Cập nhật nội dung hiển thị
+            document.getElementById('content-title').textContent = metaInfo.title;
+            document.getElementById('content-description').textContent = metaInfo.description;
+            document.getElementById('content-link').href = targetUrl;
+            
+            if (metaInfo.image) {
+                const img = document.getElementById('content-image');
+                img.src = metaInfo.image;
+                img.alt = metaInfo.title;
+                img.style.display = 'block';
+            }
         }
         
         // Hàm phát hiện Facebook crawler
@@ -128,13 +174,11 @@
         async function init() {
             const TARGET_URL = getRedirectUrl();
             
-            // Hiển thị thông tin debug
-            console.log('Current URL:', window.location.href);
             console.log('Target URL:', TARGET_URL);
             console.log('Is Facebook Crawler:', isFacebookCrawler());
             
-            // Cập nhật meta refresh với URL đích
-            document.getElementById('meta-refresh').setAttribute('content', `3;url=${TARGET_URL}`);
+            // Cập nhật link
+            document.getElementById('content-link').href = TARGET_URL;
             
             // Nếu là Facebook crawler, fetch meta info và hiển thị
             if (isFacebookCrawler()) {
@@ -143,26 +187,14 @@
                         const metaInfo = await fetchMetaInfo(TARGET_URL);
                         updateMetaTags(metaInfo, TARGET_URL);
                         console.log('Meta info updated for crawler:', metaInfo);
-                        
-                        // Hiển thị nội dung cho crawler
-                        document.body.innerHTML = `
-                            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                                <h1>${metaInfo.title}</h1>
-                                <p>${metaInfo.description}</p>
-                                ${metaInfo.image ? `<img src="${metaInfo.image}" style="max-width: 100%; height: auto;">` : ''}
-                                <p><a href="${TARGET_URL}">Continue to article</a></p>
-                            </div>
-                        `;
                     } catch (error) {
                         console.error('Error fetching meta info:', error);
-                        // Fallback nếu fetch lỗi
-                        document.body.innerHTML = `
-                            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                                <h1>Loading...</h1>
-                                <p>Please wait while we load the content...</p>
-                                <p><a href="${TARGET_URL}">Continue to article</a></p>
-                            </div>
-                        `;
+                        // Fallback
+                        updateMetaTags({
+                            title: 'Loading...',
+                            description: 'Loading content...',
+                            image: ''
+                        }, TARGET_URL);
                     }
                 } else {
                     // Fallback cho google.com
@@ -171,14 +203,6 @@
                         description: 'You are being redirected to Google',
                         image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
                     }, TARGET_URL);
-                    
-                    document.body.innerHTML = `
-                        <div style="padding: 20px; font-family: Arial, sans-serif;">
-                            <h1>Redirect to Google</h1>
-                            <p>You are being redirected to Google</p>
-                            <p><a href="${TARGET_URL}">Continue to Google</a></p>
-                        </div>
-                    `;
                 }
             } else {
                 // User thường - redirect ngay lập tức
