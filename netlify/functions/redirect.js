@@ -35,6 +35,14 @@ exports.handler = async (event, context) => {
         try {
             console.log('Attempting to fetch meta info from:', targetUrl);
             metaInfo = await fetchMetaInfo(targetUrl);
+            // Hoàn thiện giá trị rỗng bằng title tag nếu cần
+            if (!metaInfo.title) {
+                metaInfo.title = extractFirstTagText(metaInfo.html || '', 'title');
+            }
+            // Chuẩn hóa image thành absolute URL
+            metaInfo.image = resolveImageUrl(metaInfo.image, targetUrl);
+            // Xóa html khỏi response trước khi render
+            delete metaInfo.html;
             console.log('Meta info fetched successfully:', metaInfo);
         } catch (error) {
             console.error('Error fetching meta info:', error);
@@ -93,20 +101,20 @@ function fetchMetaInfo(url) {
                 try {
                     console.log('Data length received from proxy:', data.length);
                     
-                    const title = extractMeta(data, 'og:title') || 
-                                 extractMeta(data, 'title') || 
-                                 'Loading...';
+                    let title = extractMeta(data, 'og:title');
+                    if (!title) {
+                        title = extractFirstTagText(data, 'title') || 'Loading...';
+                    }
                                  
                     const description = extractMeta(data, 'og:description') || 
                                       extractMeta(data, 'description') || 
                                       'Please wait...';
                                       
-                    const image = extractMeta(data, 'og:image') || 
-                                 extractMeta(data, 'twitter:image') || 
-                                 '';
+                    let image = extractMeta(data, 'og:image') || extractMeta(data, 'twitter:image') || '';
+                    image = resolveImageUrl(image, url);
                     
                     console.log('Extracted meta from proxy:', { title, description, image });
-                    resolve({ title, description, image });
+                    resolve({ title, description, image, html: data });
                 } catch (error) {
                     console.error('Error parsing meta data from proxy:', error);
                     reject(error);
@@ -136,6 +144,35 @@ function extractMeta(html, property) {
     const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
     const match = html.match(regex);
     return match ? match[1] : null;
+}
+
+function extractFirstTagText(html, tagName) {
+    const regex = new RegExp(`<${tagName}[^>]*>([\s\S]*?)<\/${tagName}>`, 'i');
+    const match = html.match(regex);
+    if (!match) return '';
+    // Strip any nested tags
+    return match[1].replace(/<[^>]*>/g, '').trim();
+}
+
+function resolveImageUrl(imageUrl, targetUrl) {
+    if (!imageUrl) return '';
+    try {
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            return imageUrl;
+        }
+        if (imageUrl.startsWith('//')) {
+            return 'https:' + imageUrl;
+        }
+        const u = new URL(targetUrl);
+        if (imageUrl.startsWith('/')) {
+            return u.origin + imageUrl;
+        }
+        // relative path
+        const dir = u.pathname.endsWith('/') ? u.pathname : u.pathname.substring(0, u.pathname.lastIndexOf('/') + 1);
+        return u.origin + dir + imageUrl;
+    } catch (_) {
+        return imageUrl;
+    }
 }
 
 function generateFallbackMeta(targetUrl) {
