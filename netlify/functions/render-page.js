@@ -37,8 +37,8 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        // Crawler: Fetch meta info từ target URL (có timeout mềm 4s)
-        let metaInfo = await withTimeout(fetchMetaInfo(targetUrl), 4000).catch(() => null);
+        // Crawler: Fetch meta info từ target URL (có timeout mềm 7s)
+        let metaInfo = await withTimeout(fetchMetaInfo(targetUrl), 7000).catch(() => null);
 
         // Fallback mạnh nếu site đích chặn bot/không có OG
         if (!metaInfo || (!metaInfo.title && !metaInfo.image)) {
@@ -181,9 +181,22 @@ async function fetchMetaInfo(target) {
     // Try JSON-LD as well
     const jsonLd = extractFromJsonLd(html);
 
-    let title = meta['og:title'] || meta['twitter:title'] || jsonLd.headline || getTitle(html) || 'Loading...';
+    let title = meta['og:title'] || meta['twitter:title'] || jsonLd.headline || getTitle(html) || '';
     let description = meta['og:description'] || meta['twitter:description'] || jsonLd.description || meta['description'] || '';
     let image = meta['og:image'] || meta['og:image:url'] || meta['og:image:secure_url'] || meta['twitter:image'] || jsonLd.image || '';
+
+    // Extra fallbacks: H1 and first IMG in content
+    if (!title || /^\s*loading\s*\.*$/i.test(title)) {
+        const h1 = getH1(html);
+        if (h1) title = h1;
+    }
+    if (!image) {
+        let firstImg = getFirstImage(html);
+        if (firstImg) {
+            try { firstImg = new URL(firstImg, finalUrl).toString(); } catch (_) {}
+            image = firstImg;
+        }
+    }
     if (image && image.startsWith('//')) {
         image = 'https:' + image;
     }
@@ -264,6 +277,22 @@ function humanizeFromPath(urlStr) {
     } catch (_) {
         return '';
     }
+}
+
+function getH1(html) {
+    const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    if (!m) return null;
+    return m[1].replace(/<[^>]*>/g, '').trim();
+}
+
+function getFirstImage(html) {
+    // Prefer featured image like wp-post-image; fallback to first <img>
+    let m = html.match(/<img[^>]+class=["'][^"']*(?:wp-image|wp-post-image|featured|thumbnail)[^"']*["'][^>]*>/i) ||
+            html.match(/<img[^>]*>/i);
+    if (!m) return null;
+    const tag = m[0];
+    const srcMatch = tag.match(/\s(?:src|data-src|data-lazy-src|data-original)=["']([^"']+)["']/i);
+    return srcMatch ? srcMatch[1] : null;
 }
 
 function generateHTML(metaInfo, targetUrl, requestUrl) {
