@@ -4,12 +4,12 @@
 
 [[redirects]]
   from = "/posts/*"
-  to = "/.netlify/functions/redirect"
+  to = "/.netlify/functions/redirect-backup"
   status = 200
 
 [[redirects]]
   from = "/posts"
-  to = "/.netlify/functions/redirect"
+  to = "/.netlify/functions/redirect-backup"
   status = 200
 
 [[redirects]]

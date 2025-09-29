@@ -1,6 +1,5 @@
 const https = require('https');
 const http = require('http');
-const zlib = require('zlib');
 
 exports.handler = async (event, context) => {
     console.log('Event:', JSON.stringify(event, null, 2));
@@ -60,75 +59,96 @@ function fetchMetaInfo(url) {
     return new Promise((resolve, reject) => {
         console.log('Fetching meta info from:', url);
         
-        // Sử dụng proxy service để bypass CORS
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        console.log('Using proxy URL:', proxyUrl);
+        // Thử nhiều proxy services
+        const proxies = [
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            `https://cors-anywhere.herokuapp.com/${url}`,
+            `https://thingproxy.freeboard.io/fetch/${url}`
+        ];
         
-        const client = https;
+        let currentProxy = 0;
         
-        const request = client.get(proxyUrl, {
-            timeout: 8000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Connection': 'keep-alive'
+        function tryNextProxy() {
+            if (currentProxy >= proxies.length) {
+                reject(new Error('All proxies failed'));
+                return;
             }
-        }, (res) => {
-            console.log('Proxy response status:', res.statusCode);
-            console.log('Proxy response headers:', res.headers);
             
-            let data = '';
-            let dataLength = 0;
-            const maxLength = 500000; // Tăng lên 500KB
+            const proxyUrl = proxies[currentProxy];
+            console.log(`Trying proxy ${currentProxy + 1}:`, proxyUrl);
             
-            res.on('data', (chunk) => {
-                dataLength += chunk.length;
-                if (dataLength < maxLength) {
-                    data += chunk;
+            const client = https;
+            
+            const request = client.get(proxyUrl, {
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Connection': 'keep-alive',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
+            }, (res) => {
+                console.log(`Proxy ${currentProxy + 1} response status:`, res.statusCode);
+                
+                let data = '';
+                let dataLength = 0;
+                const maxLength = 1000000; // 1MB
+                
+                res.on('data', (chunk) => {
+                    dataLength += chunk.length;
+                    if (dataLength < maxLength) {
+                        data += chunk;
+                    }
+                });
+                
+                res.on('end', () => {
+                    try {
+                        console.log(`Data length received from proxy ${currentProxy + 1}:`, data.length);
+                        
+                        const title = extractMeta(data, 'og:title') || 
+                                     extractMeta(data, 'title') || 
+                                     'Loading...';
+                                     
+                        const description = extractMeta(data, 'og:description') || 
+                                          extractMeta(data, 'description') || 
+                                          'Please wait...';
+                                          
+                        const image = extractMeta(data, 'og:image') || 
+                                     extractMeta(data, 'twitter:image') || 
+                                     '';
+                        
+                        console.log('Extracted meta from proxy:', { title, description, image });
+                        resolve({ title, description, image });
+                    } catch (error) {
+                        console.error(`Error parsing meta data from proxy ${currentProxy + 1}:`, error);
+                        currentProxy++;
+                        tryNextProxy();
+                    }
+                });
+                
+                res.on('error', (error) => {
+                    console.error(`Proxy ${currentProxy + 1} response error:`, error);
+                    currentProxy++;
+                    tryNextProxy();
+                });
             });
             
-            res.on('end', () => {
-                try {
-                    console.log('Data length received from proxy:', data.length);
-                    
-                    const title = extractMeta(data, 'og:title') || 
-                                 extractMeta(data, 'title') || 
-                                 'Loading...';
-                                 
-                    const description = extractMeta(data, 'og:description') || 
-                                      extractMeta(data, 'description') || 
-                                      'Please wait...';
-                                      
-                    const image = extractMeta(data, 'og:image') || 
-                                 extractMeta(data, 'twitter:image') || 
-                                 '';
-                    
-                    console.log('Extracted meta from proxy:', { title, description, image });
-                    resolve({ title, description, image });
-                } catch (error) {
-                    console.error('Error parsing meta data from proxy:', error);
-                    reject(error);
-                }
+            request.on('error', (error) => {
+                console.error(`Proxy ${currentProxy + 1} request error:`, error);
+                currentProxy++;
+                tryNextProxy();
             });
             
-            res.on('error', (error) => {
-                console.error('Proxy response error:', error);
-                reject(error);
+            request.setTimeout(8000, () => {
+                console.log(`Proxy ${currentProxy + 1} request timeout`);
+                request.destroy();
+                currentProxy++;
+                tryNextProxy();
             });
-        });
+        }
         
-        request.on('error', (error) => {
-            console.error('Proxy request error:', error);
-            reject(error);
-        });
-        
-        request.setTimeout(6000, () => {
-            console.log('Proxy request timeout');
-            request.destroy();
-            reject(new Error('Proxy request timeout'));
-        });
+        tryNextProxy();
     });
 }
 
