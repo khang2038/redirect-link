@@ -1,0 +1,183 @@
+const https = require('https');
+const http = require('http');
+
+exports.handler = async (event, context) => {
+    const path = event.path;
+    const url = new URL(event.rawUrl);
+    
+    // Parse URL để lấy target URL
+    let targetUrl = 'https://google.com';
+    
+    if (path.startsWith('/posts/')) {
+        const pathAfterPosts = path.substring(7); // Remove '/posts/'
+        if (pathAfterPosts) {
+            targetUrl = `https://todayonus.com/posts/${pathAfterPosts}`;
+        }
+    } else if (path === '/posts' || path === '/posts/') {
+        targetUrl = 'https://google.com';
+    }
+    
+    try {
+        // Fetch meta info từ target URL
+        const metaInfo = await fetchMetaInfo(targetUrl);
+        
+        // Generate HTML với meta tags
+        const html = generateHTML(metaInfo, targetUrl);
+        
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'text/html',
+                'Cache-Control': 'public, max-age=300'
+            },
+            body: html
+        };
+    } catch (error) {
+        // Fallback HTML
+        const fallbackHtml = generateHTML({
+            title: 'Loading...',
+            description: 'Please wait while we load the content...',
+            image: ''
+        }, targetUrl);
+        
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'text/html'
+            },
+            body: fallbackHtml
+        };
+    }
+};
+
+function fetchMetaInfo(url) {
+    return new Promise((resolve, reject) => {
+        const client = url.startsWith('https') ? https : http;
+        
+        client.get(url, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            res.on('end', () => {
+                try {
+                    const title = extractMeta(data, 'og:title') || 
+                                 extractMeta(data, 'title') || 
+                                 'Loading...';
+                                 
+                    const description = extractMeta(data, 'og:description') || 
+                                      extractMeta(data, 'description') || 
+                                      'Loading content...';
+                                      
+                    const image = extractMeta(data, 'og:image') || 
+                                 extractMeta(data, 'twitter:image') || 
+                                 '';
+                    
+                    resolve({ title, description, image });
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }).on('error', (error) => {
+            reject(error);
+        });
+    });
+}
+
+function extractMeta(html, property) {
+    const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
+    const match = html.match(regex);
+    return match ? match[1] : null;
+}
+
+function generateHTML(metaInfo, targetUrl) {
+    return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Meta tags cho Facebook Open Graph -->
+    <meta property="og:title" content="${metaInfo.title}">
+    <meta property="og:description" content="${metaInfo.description}">
+    <meta property="og:image" content="${metaInfo.image}">
+    <meta property="og:url" content="${targetUrl}">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TodayOnUs">
+    
+    <!-- Meta tags cho Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${metaInfo.title}">
+    <meta name="twitter:description" content="${metaInfo.description}">
+    <meta name="twitter:image" content="${metaInfo.image}">
+    
+    <!-- Meta tags cơ bản -->
+    <title>${metaInfo.title}</title>
+    <meta name="description" content="${metaInfo.description}">
+    
+    <!-- Meta refresh -->
+    <meta http-equiv="refresh" content="3;url=${targetUrl}">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+        }
+        .link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007cba;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .link:hover {
+            background-color: #005a87;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>${metaInfo.title}</h1>
+        <p>${metaInfo.description}</p>
+        ${metaInfo.image ? `<img src="${metaInfo.image}" alt="${metaInfo.title}">` : ''}
+        <p>You will be redirected to the full article in 3 seconds...</p>
+        <a href="${targetUrl}" class="link">Continue to article</a>
+    </div>
+    
+    <script>
+        // Redirect ngay lập tức cho user thường
+        if (!navigator.userAgent.toLowerCase().includes('facebookexternalhit') && 
+            !navigator.userAgent.toLowerCase().includes('facebookcatalog') &&
+            !navigator.userAgent.toLowerCase().includes('whatsapp') &&
+            !navigator.userAgent.toLowerCase().includes('twitterbot') &&
+            !navigator.userAgent.toLowerCase().includes('linkedinbot')) {
+            window.location.href = '${targetUrl}';
+        }
+    </script>
+</body>
+</html>`;
+}

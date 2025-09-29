@@ -1,7 +1,18 @@
 [build]
   publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/posts/*"
+  to = "/.netlify/functions/render-page"
+  status = 200
+
+[[redirects]]
+  from = "/posts"
+  to = "/.netlify/functions/render-page"
+  status = 200
 
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/render-page"
   status = 200
