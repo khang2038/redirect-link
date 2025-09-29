@@ -1,21 +1,15 @@
 const https = require('https');
 const http = require('http');
-const zlib = require('zlib');
 
 exports.handler = async (event, context) => {
     const path = event.path;
     const url = new URL(event.rawUrl);
-    const requestUrl = event.rawUrl;
     
     // Parse URL để lấy target URL
     let targetUrl = 'https://google.com';
     
     if (path.startsWith('/posts/')) {
-        let pathAfterPosts = path.substring(7); // Remove '/posts/'
-        try {
-            // Decode once if encoded; if not encoded, this will throw which we ignore
-            pathAfterPosts = decodeURIComponent(pathAfterPosts);
-        } catch (_) {}
+        const pathAfterPosts = path.substring(7); // Remove '/posts/'
         if (pathAfterPosts) {
             targetUrl = `https://todayonus.com/posts/${pathAfterPosts}`;
         }
@@ -27,8 +21,8 @@ exports.handler = async (event, context) => {
         // Fetch meta info từ target URL
         const metaInfo = await fetchMetaInfo(targetUrl);
         
-        // Generate HTML với meta tags (og:url giữ URL trang của bạn)
-        const html = generateHTML(metaInfo, targetUrl, requestUrl);
+        // Generate HTML với meta tags
+        const html = generateHTML(metaInfo, targetUrl);
         
         return {
             statusCode: 200,
@@ -44,7 +38,7 @@ exports.handler = async (event, context) => {
             title: 'Loading...',
             description: 'Please wait while we load the content...',
             image: ''
-        }, targetUrl, requestUrl);
+        }, targetUrl);
         
         return {
             statusCode: 200,
@@ -56,98 +50,49 @@ exports.handler = async (event, context) => {
     }
 };
 
-async function fetchMetaInfo(target) {
-    const maxRedirects = 5;
-
-    async function fetchWithRedirects(currentUrl, redirectCount = 0) {
-        return new Promise((resolve, reject) => {
-            const isHttps = currentUrl.startsWith('https');
-            const client = isHttps ? https : http;
-
-            const req = client.request(currentUrl, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'close'
-                },
-                timeout: 10000
-            }, (res) => {
-                // Handle redirects
-                if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-                    if (redirectCount >= maxRedirects) {
-                        reject(new Error('Too many redirects'));
-                        return;
-                    }
-                    const nextUrl = new URL(res.headers.location, currentUrl).toString();
-                    res.resume();
-                    resolve(fetchWithRedirects(nextUrl, redirectCount + 1));
-                    return;
-                }
-
-                let stream = res;
-                const encoding = (res.headers['content-encoding'] || '').toLowerCase();
-                if (encoding.includes('gzip')) {
-                    stream = res.pipe(zlib.createGunzip());
-                } else if (encoding.includes('br') && zlib.createBrotliDecompress) {
-                    stream = res.pipe(zlib.createBrotliDecompress());
-                } else if (encoding.includes('deflate')) {
-                    stream = res.pipe(zlib.createInflate());
-                }
-
-                let data = '';
-                stream.on('data', chunk => data += chunk.toString('utf8'));
-                stream.on('end', () => resolve({ html: data, finalUrl: currentUrl }));
-                stream.on('error', reject);
+function fetchMetaInfo(url) {
+    return new Promise((resolve, reject) => {
+        const client = url.startsWith('https') ? https : http;
+        
+        client.get(url, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
             });
-
-            req.on('timeout', () => {
-                req.destroy(new Error('Request timed out'));
+            
+            res.on('end', () => {
+                try {
+                    const title = extractMeta(data, 'og:title') || 
+                                 extractMeta(data, 'title') || 
+                                 'Loading...';
+                                 
+                    const description = extractMeta(data, 'og:description') || 
+                                      extractMeta(data, 'description') || 
+                                      'Loading content...';
+                                      
+                    const image = extractMeta(data, 'og:image') || 
+                                 extractMeta(data, 'twitter:image') || 
+                                 '';
+                    
+                    resolve({ title, description, image });
+                } catch (error) {
+                    reject(error);
+                }
             });
-            req.on('error', reject);
-            req.end();
+        }).on('error', (error) => {
+            reject(error);
         });
-    }
-
-    const { html, finalUrl } = await fetchWithRedirects(target);
-    const meta = extractAllMeta(html);
-
-    // Prefer OG tags, then Twitter, then title/description tags
-    let title = meta['og:title'] || meta['twitter:title'] || getTitle(html) || 'Loading...';
-    let description = meta['og:description'] || meta['twitter:description'] || meta['description'] || '';
-    let image = meta['og:image'] || meta['twitter:image'] || '';
-
-    // Resolve relative image URLs
-    if (image) {
-        try { image = new URL(image, finalUrl).toString(); } catch (_) {}
-    }
-
-    return { title, description, image };
+    });
 }
 
-function extractAllMeta(html) {
-    const metaMap = {};
-    const metaTagRegex = /<meta\s+([^>]*?)\/?>(?![^<]*<meta)/gi;
-    let match;
-    while ((match = metaTagRegex.exec(html)) !== null) {
-        const attrs = match[1] || '';
-        const nameMatch = attrs.match(/(?:name|property)=["']([^"']+)["']/i);
-        const contentMatch = attrs.match(/content=["']([^"']*)["']/i);
-        if (nameMatch && contentMatch) {
-            metaMap[nameMatch[1].trim()] = contentMatch[1].trim();
-        }
-    }
-    return metaMap;
+function extractMeta(html, property) {
+    const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
+    const match = html.match(regex);
+    return match ? match[1] : null;
 }
 
-function getTitle(html) {
-    const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    return m ? m[1].trim() : null;
-}
-
-function generateHTML(metaInfo, targetUrl, requestUrl) {
+function generateHTML(metaInfo, targetUrl) {
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -158,7 +103,7 @@ function generateHTML(metaInfo, targetUrl, requestUrl) {
     <meta property="og:title" content="${metaInfo.title}">
     <meta property="og:description" content="${metaInfo.description}">
     <meta property="og:image" content="${metaInfo.image}">
-    <meta property="og:url" content="${requestUrl}">
+    <meta property="og:url" content="${targetUrl}">
     <meta property="og:type" content="article">
     <meta property="og:site_name" content="TodayOnUs">
     
