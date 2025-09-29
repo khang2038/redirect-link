@@ -67,9 +67,10 @@ async function fetchMetaInfo(target) {
             const req = client.request(currentUrl, {
                 method: 'GET',
                 headers: {
-                    'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
+                    // Use a modern browser UA to avoid cloaking
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'Connection': 'close'
                 },
@@ -99,7 +100,13 @@ async function fetchMetaInfo(target) {
 
                 let data = '';
                 stream.on('data', chunk => data += chunk.toString('utf8'));
-                stream.on('end', () => resolve({ html: data, finalUrl: currentUrl }));
+                stream.on('end', () => {
+                    // Try to respect charset if provided
+                    const ctype = (res.headers['content-type'] || '').toLowerCase();
+                    // Basic handling; Netlify functions do not include iconv by default
+                    // Most sites are utf-8; fallback as-is
+                    resolve({ html: data, finalUrl: currentUrl, contentType: ctype });
+                });
                 stream.on('error', reject);
             });
 
@@ -115,9 +122,12 @@ async function fetchMetaInfo(target) {
     const meta = extractAllMeta(html);
 
     // Prefer OG tags, then Twitter, then title/description tags
-    let title = meta['og:title'] || meta['twitter:title'] || getTitle(html) || 'Loading...';
-    let description = meta['og:description'] || meta['twitter:description'] || meta['description'] || '';
-    let image = meta['og:image'] || meta['og:image:url'] || meta['og:image:secure_url'] || meta['twitter:image'] || '';
+    // Try JSON-LD as well
+    const jsonLd = extractFromJsonLd(html);
+
+    let title = meta['og:title'] || meta['twitter:title'] || jsonLd.headline || getTitle(html) || 'Loading...';
+    let description = meta['og:description'] || meta['twitter:description'] || jsonLd.description || meta['description'] || '';
+    let image = meta['og:image'] || meta['og:image:url'] || meta['og:image:secure_url'] || meta['twitter:image'] || jsonLd.image || '';
 
     // Resolve relative image URLs
     if (image) {
@@ -149,6 +159,36 @@ function extractAllMeta(html) {
 function getTitle(html) {
     const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     return m ? m[1].trim() : null;
+}
+
+function extractFromJsonLd(html) {
+    try {
+        const scripts = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) || [];
+        for (const tag of scripts) {
+            const jsonTextMatch = tag.match(/<script[^>]*>[\s\S]*?<\/script>/i);
+            if (!jsonTextMatch) continue;
+            const jsonText = tag.replace(/^[\s\S]*?<script[^>]*>/i, '').replace(/<\/script>[\s\S]*$/i, '');
+            let obj;
+            try {
+                obj = JSON.parse(jsonText);
+            } catch (_) {
+                continue;
+            }
+            const candidate = Array.isArray(obj) ? obj.find(x => x && (x['@type'] === 'NewsArticle' || x['@type'] === 'Article' || x.headline)) : obj;
+            if (candidate) {
+                const headline = candidate.headline || candidate.name || '';
+                let image = '';
+                if (candidate.image) {
+                    if (typeof candidate.image === 'string') image = candidate.image;
+                    else if (Array.isArray(candidate.image)) image = candidate.image[0] || '';
+                    else if (candidate.image.url) image = candidate.image.url;
+                }
+                const description = candidate.description || '';
+                return { headline, image, description };
+            }
+        }
+    } catch (_) {}
+    return { headline: '', image: '', description: '' };
 }
 
 function generateHTML(metaInfo, targetUrl, requestUrl) {
