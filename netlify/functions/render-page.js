@@ -5,6 +5,7 @@ const zlib = require('zlib');
 exports.handler = async (event, context) => {
     const path = event.path;
     const url = new URL(event.rawUrl);
+    const requestUrl = event.rawUrl;
     
     // Parse URL để lấy target URL
     let targetUrl = 'https://google.com';
@@ -26,8 +27,8 @@ exports.handler = async (event, context) => {
         // Fetch meta info từ target URL
         const metaInfo = await fetchMetaInfo(targetUrl);
         
-        // Generate HTML với meta tags
-        const html = generateHTML(metaInfo, targetUrl);
+        // Generate HTML với meta tags (og:url giữ nguyên URL của site bạn)
+        const html = generateHTML(metaInfo, targetUrl, requestUrl);
         
         return {
             statusCode: 200,
@@ -43,7 +44,7 @@ exports.handler = async (event, context) => {
             title: 'Loading...',
             description: 'Please wait while we load the content...',
             image: ''
-        }, targetUrl);
+        }, targetUrl, requestUrl);
         
         return {
             statusCode: 200,
@@ -146,7 +147,7 @@ function getTitle(html) {
     return m ? m[1].trim() : null;
 }
 
-function generateHTML(metaInfo, targetUrl) {
+function generateHTML(metaInfo, targetUrl, requestUrl) {
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -157,7 +158,7 @@ function generateHTML(metaInfo, targetUrl) {
     <meta property="og:title" content="${metaInfo.title}">
     <meta property="og:description" content="${metaInfo.description}">
     <meta property="og:image" content="${metaInfo.image}">
-    <meta property="og:url" content="${targetUrl}">
+    <meta property="og:url" content="${requestUrl}">
     <meta property="og:type" content="article">
     <meta property="og:site_name" content="TodayOnUs">
     
