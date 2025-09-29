@@ -95,9 +95,18 @@ function fetchMetaInfo(url) {
 }
 
 function extractMeta(html, property) {
-    const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
-    const match = html.match(regex);
-    return match ? match[1] : null;
+    const metaTagRegex = /<meta\b[^>]*>/gi;
+    let match;
+    while ((match = metaTagRegex.exec(html)) !== null) {
+        const tag = match[0];
+        const hasProp = new RegExp(`(?:property|name)=["']${property}["']`, 'i').test(tag);
+        if (!hasProp) continue;
+        const contentMatch = tag.match(/content=["']([^"']*)["']/i);
+        if (contentMatch) {
+            return contentMatch[1];
+        }
+    }
+    return null;
 }
 
 function generateHTML(metaInfo, targetUrl) {
