@@ -67,98 +67,103 @@ function fetchMetaInfo(url) {
     return new Promise((resolve, reject) => {
         console.log('Fetching meta info from:', url);
         
-        // Thử nhiều proxy services
-        const proxies = [
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            `https://cors-anywhere.herokuapp.com/${url}`,
-            `https://thingproxy.freeboard.io/fetch/${url}`
-        ];
-        
-        let currentProxy = 0;
-        
-        function tryNextProxy() {
-            if (currentProxy >= proxies.length) {
-                reject(new Error('All proxies failed'));
-                return;
+        // 1) Thử fetch trực tiếp bằng UA của Facebook crawler (nhiều site trả OG đúng theo UA này)
+        const client = https;
+        const directReq = client.get(url, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext/)',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive'
             }
-            
-            const proxyUrl = proxies[currentProxy];
-            console.log(`Trying proxy ${currentProxy + 1}:`, proxyUrl);
-            
-            const client = https;
-            
-            const request = client.get(proxyUrl, {
+        }, (res) => {
+            console.log('Direct fetch status:', res.statusCode);
+            let data = '';
+            let dataLength = 0;
+            const maxLength = 1000000;
+            res.on('data', (chunk) => {
+                dataLength += chunk.length;
+                if (dataLength < maxLength) data += chunk;
+            });
+            res.on('end', () => {
+                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300 && data) {
+                    try {
+                        let title = extractMeta(data, 'og:title');
+                        if (!title) title = extractFirstTagText(data, 'title') || 'Loading...';
+                        const description = extractMeta(data, 'og:description') || extractMeta(data, 'description') || 'Please wait...';
+                        let image = extractMeta(data, 'og:image') || extractMeta(data, 'og:image:secure_url') || extractMeta(data, 'twitter:image') || '';
+                        console.log('Extracted meta from direct fetch:', { title, description, image });
+                        resolve({ title, description, image, html: data });
+                        return;
+                    } catch (e) {
+                        console.error('Direct parse error, falling back to proxy:', e);
+                        fallbackToProxy();
+                    }
+                } else {
+                    console.log('Direct fetch not OK, falling back to proxy');
+                    fallbackToProxy();
+                }
+            });
+            res.on('error', (err) => {
+                console.error('Direct fetch response error:', err);
+                fallbackToProxy();
+            });
+        });
+        directReq.on('error', (err) => {
+            console.error('Direct fetch request error:', err);
+            fallbackToProxy();
+        });
+        directReq.setTimeout(8000, () => {
+            console.log('Direct fetch timeout');
+            directReq.destroy();
+            fallbackToProxy();
+        });
+
+        // 2) Fallback sang proxy allorigins (ổn định, không cần đăng ký)
+        function fallbackToProxy() {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            console.log('Trying proxy (allorigins):', proxyUrl);
+            const req = https.get(proxyUrl, {
                 timeout: 10000,
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9',
-                    'Connection': 'keep-alive',
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'Connection': 'keep-alive'
                 }
             }, (res) => {
-                console.log(`Proxy ${currentProxy + 1} response status:`, res.statusCode);
-                
+                console.log('Proxy response status:', res.statusCode);
                 let data = '';
                 let dataLength = 0;
-                const maxLength = 1000000; // 1MB
-                
+                const maxLength = 1000000;
                 res.on('data', (chunk) => {
                     dataLength += chunk.length;
-                    if (dataLength < maxLength) {
-                        data += chunk;
-                    }
+                    if (dataLength < maxLength) data += chunk;
                 });
-                
                 res.on('end', () => {
                     try {
-                        console.log(`Data length received from proxy ${currentProxy + 1}:`, data.length);
-                        
                         let title = extractMeta(data, 'og:title');
-                        if (!title) {
-                            title = extractFirstTagText(data, 'title') || 'Loading...';
-                        }
-                                     
-                        const description = extractMeta(data, 'og:description') || 
-                                          extractMeta(data, 'description') || 
-                                          'Please wait...';
-                                          
-                        let image = extractMeta(data, 'og:image') || 
-                                     extractMeta(data, 'og:image:secure_url') ||
-                                     extractMeta(data, 'twitter:image') || 
-                                     '';
-                        
+                        if (!title) title = extractFirstTagText(data, 'title') || 'Loading...';
+                        const description = extractMeta(data, 'og:description') || extractMeta(data, 'description') || 'Please wait...';
+                        let image = extractMeta(data, 'og:image') || extractMeta(data, 'og:image:secure_url') || extractMeta(data, 'twitter:image') || '';
                         console.log('Extracted meta from proxy:', { title, description, image });
                         resolve({ title, description, image, html: data });
-                    } catch (error) {
-                        console.error(`Error parsing meta data from proxy ${currentProxy + 1}:`, error);
-                        currentProxy++;
-                        tryNextProxy();
+                    } catch (e) {
+                        reject(e);
                     }
                 });
-                
-                res.on('error', (error) => {
-                    console.error(`Proxy ${currentProxy + 1} response error:`, error);
-                    currentProxy++;
-                    tryNextProxy();
+                res.on('error', (err) => {
+                    reject(err);
                 });
             });
-            
-            request.on('error', (error) => {
-                console.error(`Proxy ${currentProxy + 1} request error:`, error);
-                currentProxy++;
-                tryNextProxy();
-            });
-            
-            request.setTimeout(8000, () => {
-                console.log(`Proxy ${currentProxy + 1} request timeout`);
-                request.destroy();
-                currentProxy++;
-                tryNextProxy();
+            req.on('error', (err) => reject(err));
+            req.setTimeout(8000, () => {
+                console.log('Proxy request timeout');
+                req.destroy();
+                reject(new Error('Proxy request timeout'));
             });
         }
-        
-        tryNextProxy();
     });
 }
 
@@ -279,3 +284,4 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
