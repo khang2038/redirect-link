@@ -2,12 +2,17 @@
   publish = "."
   functions = "netlify/functions"
 
+# Prefer fast 301 redirects so crawlers fetch OG directly from the origin
 [[redirects]]
   from = "/posts/*"
-  to = "/.netlify/functions/render-page"
-  status = 200
+  to = "https://todayonus.com/posts/:splat"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/posts"
-  to = "/.netlify/functions/render-page"
-  status = 200
+  to = "https://google.com"
+  status = 301
+  force = true
+
+# Optional: keep other paths served normally (or add your own rules)

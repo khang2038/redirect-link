@@ -1,5 +1,5 @@
 # Netlify redirects file
-# Higher priority than netlify.toml. Define explicit 301 rules for posts.
+# This file should be in the root directory of your site
 
-/posts/*    https://todayonus.com/posts/:splat    301!
-/posts      https://google.com                     301!
+# Redirect all requests to index.html
+/*    /index.html   200
