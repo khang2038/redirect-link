@@ -25,14 +25,14 @@ exports.handler = async (event, context) => {
     const fallbackMeta = generateFallbackMeta(targetUrl);
     
     try {
-        // Fetch meta info từ target URL với timeout ngắn
+        // Fetch meta info từ target URL với timeout dài hơn
         const metaInfo = await Promise.race([
             fetchMetaInfo(targetUrl),
             new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), 1500)
+                setTimeout(() => reject(new Error('Timeout')), 8000)
             )
         ]);
-        console.log('Meta info fetched:', metaInfo);
+        console.log('Meta info fetched successfully:', metaInfo);
         
         // Generate HTML với meta tags thực tế
         const html = generateHTML(metaInfo, targetUrl);
@@ -64,18 +64,27 @@ exports.handler = async (event, context) => {
 
 function fetchMetaInfo(url) {
     return new Promise((resolve, reject) => {
+        console.log('Fetching meta info from:', url);
+        
         const client = url.startsWith('https') ? https : http;
         
         const request = client.get(url, {
-            timeout: 3000,
+            timeout: 5000,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; FacebookBot/1.0)',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
         }, (res) => {
+            console.log('Response status:', res.statusCode);
+            console.log('Response headers:', res.headers);
+            
             let data = '';
             let dataLength = 0;
-            const maxLength = 100000; // Giới hạn 100KB
+            const maxLength = 200000; // Tăng lên 200KB
             
             res.on('data', (chunk) => {
                 dataLength += chunk.length;
@@ -86,6 +95,8 @@ function fetchMetaInfo(url) {
             
             res.on('end', () => {
                 try {
+                    console.log('Data length received:', data.length);
+                    
                     const title = extractMeta(data, 'og:title') || 
                                  extractMeta(data, 'title') || 
                                  'Loading...';
@@ -98,18 +109,22 @@ function fetchMetaInfo(url) {
                                  extractMeta(data, 'twitter:image') || 
                                  '';
                     
+                    console.log('Extracted meta:', { title, description, image });
                     resolve({ title, description, image });
                 } catch (error) {
+                    console.error('Error parsing meta data:', error);
                     reject(error);
                 }
             });
         });
         
         request.on('error', (error) => {
+            console.error('Request error:', error);
             reject(error);
         });
         
-        request.setTimeout(2000, () => {
+        request.setTimeout(3000, () => {
+            console.log('Request timeout');
             request.destroy();
             reject(new Error('Request timeout'));
         });
