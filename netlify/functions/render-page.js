@@ -25,8 +25,49 @@ exports.handler = async (event, context) => {
     
     try {
         // Fetch meta info từ target URL
-        const metaInfo = await fetchMetaInfo(targetUrl);
-        
+        let metaInfo = await fetchMetaInfo(targetUrl);
+
+        // Fallback mạnh nếu site đích chặn bot/không có OG
+        if (!metaInfo || (!metaInfo.title && !metaInfo.image)) {
+            metaInfo = { title: '', description: '', image: '' };
+        }
+
+        // Nếu thiếu, thử thêm các biến thể URL dễ scrape hơn (AMP)
+        if (!metaInfo.title || /^\s*loading\s*\.*$/i.test(metaInfo.title)) {
+            const candidates = [
+                targetUrl.endsWith('/') ? targetUrl + 'amp' : targetUrl + '/amp',
+                targetUrl + '?amp',
+                targetUrl + '/?amp',
+            ];
+            for (const alt of candidates) {
+                try {
+                    const altMeta = await fetchMetaInfo(alt);
+                    if (altMeta && (altMeta.title || altMeta.image)) {
+                        metaInfo = {
+                            title: altMeta.title || metaInfo.title,
+                            description: altMeta.description || metaInfo.description,
+                            image: altMeta.image || metaInfo.image,
+                        };
+                        break;
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // Tạo title fallback từ slug nếu thiếu
+        if (!metaInfo.title || /^\s*loading\s*\.*$/i.test(metaInfo.title)) {
+            metaInfo.title = humanizeFromPath(targetUrl) || 'News';
+        }
+        // Tạo description fallback
+        if (!metaInfo.description) {
+            metaInfo.description = metaInfo.title;
+        }
+        // Ảnh fallback bằng dịch vụ screenshot (luôn khả dụng cho OG)
+        if (!metaInfo.image) {
+            const screenshot = `https://image.thum.io/get/width/1200/crop/630/noanimate/${encodeURIComponent(targetUrl)}`;
+            metaInfo.image = screenshot;
+        }
+
         // Generate HTML với meta tags (og:url giữ nguyên URL của site bạn)
         const html = generateHTML(metaInfo, targetUrl, requestUrl);
         
@@ -41,9 +82,9 @@ exports.handler = async (event, context) => {
     } catch (error) {
         // Fallback HTML
         const fallbackHtml = generateHTML({
-            title: 'Loading...',
-            description: 'Please wait while we load the content...',
-            image: ''
+            title: humanizeFromPath(targetUrl) || 'News',
+            description: humanizeFromPath(targetUrl) || 'News',
+            image: `https://image.thum.io/get/width/1200/crop/630/noanimate/${encodeURIComponent(targetUrl)}`
         }, targetUrl, requestUrl);
         
         return {
@@ -72,9 +113,11 @@ async function fetchMetaInfo(target) {
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'close'
+                    'Connection': 'close',
+                    'Referer': 'https://www.google.com/',
+                    'Cache-Control': 'no-cache'
                 },
-                timeout: 10000
+                timeout: 12000
             }, (res) => {
                 // Handle redirects
                 if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
@@ -128,6 +171,9 @@ async function fetchMetaInfo(target) {
     let title = meta['og:title'] || meta['twitter:title'] || jsonLd.headline || getTitle(html) || 'Loading...';
     let description = meta['og:description'] || meta['twitter:description'] || jsonLd.description || meta['description'] || '';
     let image = meta['og:image'] || meta['og:image:url'] || meta['og:image:secure_url'] || meta['twitter:image'] || jsonLd.image || '';
+    if (image && image.startsWith('//')) {
+        image = 'https:' + image;
+    }
 
     // Resolve relative image URLs
     if (image) {
@@ -189,6 +235,22 @@ function extractFromJsonLd(html) {
         }
     } catch (_) {}
     return { headline: '', image: '', description: '' };
+}
+
+function humanizeFromPath(urlStr) {
+    try {
+        const u = new URL(urlStr);
+        const path = u.pathname || '';
+        const slug = path.split('/').filter(Boolean).pop() || '';
+        if (!slug) return '';
+        return slug
+            .replace(/[-_]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/\b\w/g, c => c.toUpperCase());
+    } catch (_) {
+        return '';
+    }
 }
 
 function generateHTML(metaInfo, targetUrl, requestUrl) {
