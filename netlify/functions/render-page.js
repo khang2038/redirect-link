@@ -117,7 +117,7 @@ async function fetchMetaInfo(target) {
     // Prefer OG tags, then Twitter, then title/description tags
     let title = meta['og:title'] || meta['twitter:title'] || getTitle(html) || 'Loading...';
     let description = meta['og:description'] || meta['twitter:description'] || meta['description'] || '';
-    let image = meta['og:image'] || meta['twitter:image'] || '';
+    let image = meta['og:image'] || meta['og:image:url'] || meta['og:image:secure_url'] || meta['twitter:image'] || '';
 
     // Resolve relative image URLs
     if (image) {
@@ -129,14 +129,18 @@ async function fetchMetaInfo(target) {
 
 function extractAllMeta(html) {
     const metaMap = {};
-    const metaTagRegex = /<meta\s+([^>]*?)\/?>(?![^<]*<meta)/gi;
-    let match;
-    while ((match = metaTagRegex.exec(html)) !== null) {
-        const attrs = match[1] || '';
-        const nameMatch = attrs.match(/(?:name|property)=["']([^"']+)["']/i);
-        const contentMatch = attrs.match(/content=["']([^"']*)["']/i);
+    const metaTagRegex = /<meta\b[^>]*>/gi;
+    let tag;
+    while ((tag = metaTagRegex.exec(html)) !== null) {
+        const attrs = tag[0];
+        const nameMatch = attrs.match(/(?:name|property)\s*=\s*(["'])(.*?)\1/i) || attrs.match(/(?:name|property)\s*=\s*([^\s"'>]+)/i);
+        const contentMatch = attrs.match(/content\s*=\s*(["'])([\s\S]*?)\1/i) || attrs.match(/content\s*=\s*([^\s"'>]+)/i);
         if (nameMatch && contentMatch) {
-            metaMap[nameMatch[1].trim()] = contentMatch[1].trim();
+            const key = nameMatch[2] || nameMatch[1];
+            const val = contentMatch[2] || contentMatch[1];
+            if (key && typeof key === 'string') {
+                metaMap[key.trim()] = (val || '').trim();
+            }
         }
     }
     return metaMap;
