@@ -2,10 +2,8 @@ const https = require('https');
 const http = require('http');
 
 exports.handler = async (event, context) => {
-    console.log('Event:', JSON.stringify(event, null, 2));
-    
     const path = event.path;
-    console.log('Path:', path);
+    const url = new URL(event.rawUrl);
     
     // Parse URL để lấy target URL
     let targetUrl = 'https://google.com';
@@ -19,21 +17,11 @@ exports.handler = async (event, context) => {
         targetUrl = 'https://google.com';
     }
     
-    console.log('Target URL:', targetUrl);
-    
-    // Generate HTML với meta tags cố định trước
-    const fallbackHtml = generateHTML({
-        title: 'SAD NEWS: Just 15 minutes ago, Bruce Willis family broke down in tears',
-        description: 'Known for his iconic roles in Die Hard, Pulp Fiction, The Sixth Sense, and countless other films',
-        image: 'https://todayonus.com/wp-content/uploads/2025/01/bruce-willis-news.jpg'
-    }, targetUrl);
-    
     try {
         // Fetch meta info từ target URL
         const metaInfo = await fetchMetaInfo(targetUrl);
-        console.log('Meta info fetched:', metaInfo);
         
-        // Generate HTML với meta tags thực tế
+        // Generate HTML với meta tags
         const html = generateHTML(metaInfo, targetUrl);
         
         return {
@@ -45,9 +33,13 @@ exports.handler = async (event, context) => {
             body: html
         };
     } catch (error) {
-        console.error('Error fetching meta info:', error);
+        // Fallback HTML
+        const fallbackHtml = generateHTML({
+            title: 'Loading...',
+            description: 'Please wait while we load the content...',
+            image: ''
+        }, targetUrl);
         
-        // Fallback HTML với thông tin cố định
         return {
             statusCode: 200,
             headers: {
@@ -95,18 +87,9 @@ function fetchMetaInfo(url) {
 }
 
 function extractMeta(html, property) {
-    const metaTagRegex = /<meta\b[^>]*>/gi;
-    let match;
-    while ((match = metaTagRegex.exec(html)) !== null) {
-        const tag = match[0];
-        const hasProp = new RegExp(`(?:property|name)=["']${property}["']`, 'i').test(tag);
-        if (!hasProp) continue;
-        const contentMatch = tag.match(/content=["']([^"']*)["']/i);
-        if (contentMatch) {
-            return contentMatch[1];
-        }
-    }
-    return null;
+    const regex = new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i');
+    const match = html.match(regex);
+    return match ? match[1] : null;
 }
 
 function generateHTML(metaInfo, targetUrl) {
