@@ -4,8 +4,9 @@ const http = require('http');
 exports.handler = async (event, context) => {
     console.log('Event:', JSON.stringify(event, null, 2));
     
-    const path = event.path || '/';
-    const requestUrl = event.headers['x-forwarded-proto'] + '://' + event.headers.host + event.path;
+    // Lấy path từ query parameter hoặc từ URL path
+    let path = event.queryStringParameters?.path || event.path || '/';
+    const requestUrl = event.headers['x-forwarded-proto'] + '://' + event.headers.host + path;
     
     console.log('Path:', path);
     console.log('Request URL:', requestUrl);

@@ -4,15 +4,15 @@
 
 [[redirects]]
   from = "/posts/*"
-  to = "/.netlify/functions/simple-render"
+  to = "/.netlify/functions/simple-render?path=/posts/:splat"
   status = 200
 
 [[redirects]]
   from = "/posts"
-  to = "/.netlify/functions/simple-render"
+  to = "/.netlify/functions/simple-render?path=/posts"
   status = 200
 
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/simple-render"
+  to = "/.netlify/functions/simple-render?path=:splat"
   status = 200
