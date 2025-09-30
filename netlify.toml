@@ -1,18 +1,7 @@
 [build]
   publish = "."
-  functions = "netlify/functions"
-
-[[redirects]]
-  from = "/posts/*"
-  to = "/.netlify/functions/simple-render?path=/posts/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/posts"
-  to = "/.netlify/functions/simple-render?path=/posts"
-  status = 200
 
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/simple-render?path=:splat"
+  to = "/index.html"
   status = 200
