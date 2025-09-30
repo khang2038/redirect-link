@@ -1,40 +1,84 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+
     <!-- Meta tags cho Facebook Open Graph -->
-    <meta property="og:title" content="" id="og-title">
-    <meta property="og:description" content="" id="og-description">
-    <meta property="og:image" content="" id="og-image">
-    <meta property="og:url" content="" id="og-url">
+    <meta property="og:title" content="Loading...">
+    <meta property="og:description" content="Please wait while we load the content...">
+    <meta property="og:image" content="">
+    <meta property="og:url" content="">
     <meta property="og:type" content="article">
     <meta property="og:site_name" content="TodayOnUs">
-    
+
     <!-- Meta tags cho Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="" id="twitter-title">
-    <meta name="twitter:description" content="" id="twitter-description">
-    <meta name="twitter:image" content="" id="twitter-image">
-    
+    <meta name="twitter:title" content="Loading...">
+    <meta name="twitter:description" content="Please wait while we load the content...">
+    <meta name="twitter:image" content="">
+
     <!-- Meta tags cơ bản -->
-    <title id="page-title">Loading...</title>
-    <meta name="description" content="" id="page-description">
-    
-    <!-- Meta refresh cho Facebook crawler -->
-    <meta http-equiv="refresh" content="3;url=" id="meta-refresh">
-    
+    <title>Loading...</title>
+    <meta name="description" content="Please wait while we load the content...">
+
+    <!-- Meta refresh -->
+    <meta http-equiv="refresh" content="3;url=https://google.com">
+
     <style>
         body {
             margin: 0;
-            padding: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
             background-color: white;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+        }
+
+        .link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007cba;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .link:hover {
+            background-color: #005a87;
         }
     </style>
 </head>
+
 <body>
-</body>
+    <div class="container">
+        <h1>Loading...</h1>
+        <p>Please wait while we load the content...</p>
+        <p>You will be redirected in 3 seconds...</p>
+        <a href="https://google.com" class="link">Continue to article</a>
+    </div>
 
     <script>
         // Hàm xử lý redirect động
@@ -42,152 +86,36 @@
             const currentUrl = window.location.href;
             const url = new URL(currentUrl);
             const pathname = url.pathname;
-            
-            console.log('Current URL:', currentUrl);
-            console.log('Pathname:', pathname);
-            
-            // Kiểm tra nếu pathname kết thúc bằng '/posts' hoặc '/posts/'
+
             if (pathname === '/posts' || pathname === '/posts/') {
-                console.log('Redirecting to Google - posts only');
                 return 'https://google.com';
             }
-            
-            // Kiểm tra nếu có '/posts/' trong pathname
+
             const postsMatch = pathname.match(/^\/posts\/(.+)$/);
             if (postsMatch) {
                 const pathAfterPosts = postsMatch[1];
-                const targetUrl = `https://todayonus.com/posts/${pathAfterPosts}`;
-                console.log('Redirecting to:', targetUrl);
-                return targetUrl;
+                return `https://todayonus.com/posts/${pathAfterPosts}`;
             }
-            
-            // Không có posts -> redirect đến google.com
-            console.log('Redirecting to Google - no posts found');
+
             return 'https://google.com';
         }
-        
-        // Hàm fetch thông tin từ URL đích (chạy trong background)
-        async function fetchMetaInfo(targetUrl) {
-            try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-                const response = await fetch(proxyUrl);
-                const html = await response.text();
-                
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 
-                             doc.querySelector('title')?.textContent || 
-                             'Loading...';
-                             
-                const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
-                                  doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
-                                  'Đang tải nội dung...';
-                                  
-                const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || 
-                             doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') || 
-                             '';
-                
-                return { title, description, image };
-            } catch (error) {
-                console.error('Error fetching meta info:', error);
-                return {
-                    title: 'Loading...',
-                    description: 'Đang tải nội dung...',
-                    image: ''
-                };
-            }
-        }
-        
-        // Hàm cập nhật meta tags
-        function updateMetaTags(metaInfo, targetUrl) {
-            document.getElementById('og-title').setAttribute('content', metaInfo.title);
-            document.getElementById('og-description').setAttribute('content', metaInfo.description);
-            document.getElementById('og-image').setAttribute('content', metaInfo.image);
-            document.getElementById('og-url').setAttribute('content', targetUrl);
-            
-            document.getElementById('twitter-title').setAttribute('content', metaInfo.title);
-            document.getElementById('twitter-description').setAttribute('content', metaInfo.description);
-            document.getElementById('twitter-image').setAttribute('content', metaInfo.image);
-            
-            document.getElementById('page-title').textContent = metaInfo.title;
-            document.getElementById('page-description').setAttribute('content', metaInfo.description);
-        }
-        
-        // Hàm phát hiện Facebook crawler
+
+        // Hàm phát hiện crawler
         function isFacebookCrawler() {
             const userAgent = navigator.userAgent.toLowerCase();
-            return userAgent.includes('facebookexternalhit') || 
-                   userAgent.includes('facebookcatalog') ||
-                   userAgent.includes('whatsapp') ||
-                   userAgent.includes('twitterbot') ||
-                   userAgent.includes('linkedinbot');
+            return userAgent.includes('facebookexternalhit') ||
+                userAgent.includes('facebookcatalog') ||
+                userAgent.includes('whatsapp') ||
+                userAgent.includes('twitterbot') ||
+                userAgent.includes('linkedinbot');
         }
-        
-        // Hàm chính
-        async function init() {
-            const TARGET_URL = getRedirectUrl();
-            
-            // Hiển thị thông tin debug
-            console.log('Current URL:', window.location.href);
-            console.log('Target URL:', TARGET_URL);
-            console.log('Is Facebook Crawler:', isFacebookCrawler());
-            
-            // Cập nhật meta refresh với URL đích
-            document.getElementById('meta-refresh').setAttribute('content', `3;url=${TARGET_URL}`);
-            
-            // Nếu là Facebook crawler, fetch meta info và hiển thị
-            if (isFacebookCrawler()) {
-                if (TARGET_URL !== 'https://google.com') {
-                    try {
-                        const metaInfo = await fetchMetaInfo(TARGET_URL);
-                        updateMetaTags(metaInfo, TARGET_URL);
-                        console.log('Meta info updated for crawler:', metaInfo);
-                        
-                        // Hiển thị nội dung cho crawler
-                        document.body.innerHTML = `
-                            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                                <h1>${metaInfo.title}</h1>
-                                <p>${metaInfo.description}</p>
-                                ${metaInfo.image ? `<img src="${metaInfo.image}" style="max-width: 100%; height: auto;">` : ''}
-                                <p><a href="${TARGET_URL}">Continue to article</a></p>
-                            </div>
-                        `;
-                    } catch (error) {
-                        console.error('Error fetching meta info:', error);
-                        // Fallback nếu fetch lỗi
-                        document.body.innerHTML = `
-                            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                                <h1>Loading...</h1>
-                                <p>Please wait while we load the content...</p>
-                                <p><a href="${TARGET_URL}">Continue to article</a></p>
-                            </div>
-                        `;
-                    }
-                } else {
-                    // Fallback cho google.com
-                    updateMetaTags({
-                        title: 'Redirect to Google',
-                        description: 'You are being redirected to Google',
-                        image: 'https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png'
-                    }, TARGET_URL);
-                    
-                    document.body.innerHTML = `
-                        <div style="padding: 20px; font-family: Arial, sans-serif;">
-                            <h1>Redirect to Google</h1>
-                            <p>You are being redirected to Google</p>
-                            <p><a href="${TARGET_URL}">Continue to Google</a></p>
-                        </div>
-                    `;
-                }
-            } else {
-                // User thường - redirect ngay lập tức
-                window.location.href = TARGET_URL;
-            }
+
+        // Redirect ngay lập tức cho user thường
+        if (!isFacebookCrawler()) {
+            const targetUrl = getRedirectUrl();
+            window.location.href = targetUrl;
         }
-        
-        // Khởi tạo
-        init();
     </script>
 </body>
+
 </html>
